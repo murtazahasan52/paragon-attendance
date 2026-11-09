@@ -1,0 +1,8 @@
+desktop
+android
+**/node_modules
+frontend/build
+**/__pycache__
+*.exe
+*.apk
+*.jks
