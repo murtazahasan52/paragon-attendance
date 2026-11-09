@@ -1,6 +1,10 @@
 # Deploy Paragon Attendance on Vercel (free) + MongoDB Atlas (free)
 
-One Vercel project serves the web app **and** the API (`/api/*`, Python FastAPI).
+One Vercel project with two **services** (see `vercel.json`):
+- `frontend`: the React app (`frontend/`), public at `/`
+- `backend`: the FastAPI server (`backend/server.py`, entrypoint `server:app`), public at `/api/*`. It receives the full path, e.g. `/api/login`.
+
+`desktop/` (Windows edition) and `android/` are not deployed.
 Data lives in MongoDB Atlas. The Android app just opens your Vercel address.
 
 ## 1. MongoDB Atlas (5 min)
@@ -16,7 +20,7 @@ The `desktop/` and `android/` folders are ignored by Vercel through `.verceligno
 
 ## 3. Vercel
 1. vercel.com → **Add New → Project** → import the repository.
-2. Framework preset: **Other**. Leave the build settings alone, because `vercel.json` sets them.
+2. Leave the root directory as the repository root and don't change the build settings: `vercel.json` defines both services. If Vercel asks for a framework preset, choose **Services**.
 3. **Environment Variables**:
 
 | Name | Value |

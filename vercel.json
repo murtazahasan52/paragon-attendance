@@ -1,23 +1,37 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": null,
-  "installCommand": "cd frontend && npm install --no-audit --no-fund",
-  "buildCommand": "cd frontend && CI=false npm run build",
-  "outputDirectory": "frontend/build",
-  "functions": {
-    "api/index.py": {
-      "maxDuration": 300,
-      "includeFiles": "backend/**"
+  "services": {
+    "frontend": {
+      "root": "frontend",
+      "framework": "create-react-app",
+      "installCommand": "npm install --no-audit --no-fund",
+      "buildCommand": "CI=false npm run build",
+      "outputDirectory": "build",
+      "rewrites": [
+        {
+          "source": "/((?!.*\\.).*)",
+          "destination": "/index.html"
+        }
+      ]
+    },
+    "backend": {
+      "root": "backend",
+      "framework": "fastapi",
+      "entrypoint": "server:app"
     }
   },
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api/index"
+      "destination": {
+        "service": "backend"
+      }
     },
     {
-      "source": "/((?!api/).*)",
-      "destination": "/index.html"
+      "source": "/(.*)",
+      "destination": {
+        "service": "frontend"
+      }
     }
   ],
   "crons": [
