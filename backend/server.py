@@ -366,6 +366,13 @@ def daily_rate(monthly_salary: float, working_days: int) -> float:
 APP_DEFAULTS = {
     "company_name": "Paragon",
     "interakt_api_key": "",
+    "wa_provider": "interakt",            # "interakt" or "bhashsms"
+    "bhash_url": "https://bhashsms.com/api/sendmsgutil.php",
+    "bhash_user": "hayatbw19",
+    "bhash_pass": "",
+    "bhash_sender": "BUZWAP",
+    "bhash_priority": "wa",
+    "bhash_stype": "normal",
     "country_code": "+91",
     "tpl_attendance": "attendance_update",
     "tpl_salary": "salary_slip",
@@ -395,6 +402,13 @@ def mask(key: str) -> str:
 class AppSettingsIn(BaseModel):
     company_name: str = "Paragon"
     interakt_api_key: Optional[str] = None  # None / masked = keep existing
+    wa_provider: str = Field("interakt", pattern=r"^(interakt|bhashsms)$")
+    bhash_url: str = "https://bhashsms.com/api/sendmsgutil.php"
+    bhash_user: str = ""
+    bhash_pass: Optional[str] = None  # None / masked = keep existing
+    bhash_sender: str = "BUZWAP"
+    bhash_priority: str = "wa"
+    bhash_stype: str = "normal"
     country_code: str = "+91"
     tpl_attendance: str = "attendance_update"
     tpl_salary: str = "salary_slip"
@@ -415,6 +429,8 @@ async def read_app_settings():
     s = await get_app_settings()
     s["has_api_key"] = bool(s["interakt_api_key"])
     s["interakt_api_key"] = mask(s["interakt_api_key"])
+    s["has_bhash_pass"] = bool(s["bhash_pass"])
+    s["bhash_pass"] = mask(s["bhash_pass"])
     return s
 
 
@@ -427,6 +443,10 @@ async def save_app_settings(body: AppSettingsIn):
         data["interakt_api_key"] = key.removeprefix("Basic ").strip()
     else:
         data["interakt_api_key"] = cur["interakt_api_key"]
+    bp = (data.pop("bhash_pass") or "").strip()
+    data["bhash_pass"] = bp if bp and not bp.startswith("•") else cur["bhash_pass"]
+    for k in ("bhash_url", "bhash_user", "bhash_sender", "bhash_priority", "bhash_stype"):
+        data[k] = (data.get(k) or "").strip() or APP_DEFAULTS[k]
     await db.app_settings.update_one({"key": "app"}, {"$set": {**data, "key": "app"}}, upsert=True)
     return await read_app_settings()
 
@@ -441,6 +461,12 @@ def split_phone(phone: str, country_code: str):
     return "+" + cc, digits
 
 
+def bhash_value(v: str) -> str:
+    # BhashSMS separates variables with commas: drop thousands commas (15,000 -> 15000), other commas -> space
+    v = re.sub(r"(?<=\d),(?=\d)", "", v)
+    return re.sub(r"\s*,\s*", " / ", v).strip() or "-"  # "Sunil, Ravi" -> "Sunil / Ravi"
+
+
 def wa_value(v) -> str:
     # WhatsApp template variables cannot contain new lines / tabs / 4+ spaces
     s = re.sub(r"[\r\n\t]+", " ", str(v if v not in (None, "") else "-"))
@@ -452,6 +478,28 @@ async def send_template(phone: str, template: str, values: List, kind: str, ref:
     entry = {"id": str(uuid.uuid4()), "at": now_ist().isoformat(timespec="seconds"), "to": phone,
              "kind": kind, "template": template, "ref": ref, "values": [wa_value(v) for v in values]}
     cc, num = split_phone(phone, s["country_code"])
+    entry["provider"] = s.get("wa_provider", "interakt")
+    if entry["provider"] == "bhashsms":
+        if not s["bhash_user"] or not s["bhash_pass"]:
+            entry.update(status="skipped", response="BhashSMS user / password not set")
+        elif len(num) < 8:
+            entry.update(status="failed", response="Invalid phone number")
+        else:
+            # BhashSMS WhatsApp: text = approved template name, Params = the variables, comma separated
+            params = ",".join(bhash_value(v) for v in entry["values"])
+            q = {"user": s["bhash_user"], "pass": s["bhash_pass"], "sender": s["bhash_sender"], "phone": num,
+                 "text": template, "priority": s["bhash_priority"], "stype": s["bhash_stype"], "Params": params}
+            try:
+                async with httpx.AsyncClient(timeout=20, follow_redirects=True) as hc:
+                    r = await hc.get(s["bhash_url"], params=q)
+                body = r.text.strip()[:500]
+                bad = re.search(r"invalid|error|fail|insufficient|incorrect|wrong|not\s+(allowed|approved|found)", body, re.I)
+                ok = r.status_code < 300 and body and not bad
+                entry.update(status="sent" if ok else "failed", response=f"{r.status_code} {body or '(empty reply)'}")
+            except Exception as e:  # network errors
+                entry.update(status="failed", response=str(e)[:500])
+        await db.wa_logs.insert_one(dict(entry))
+        return clean(entry)
     if not s["interakt_api_key"]:
         entry.update(status="skipped", response="Interakt API key not set")
     elif len(num) < 8:

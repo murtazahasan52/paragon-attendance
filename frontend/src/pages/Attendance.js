@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { api, fmtDate, todayISO, useLiveSync } from "../api";
 import { Modal } from "../components";
 
@@ -9,13 +9,19 @@ export default function Attendance({ month, isAdmin = true }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
   const [pick, setPick] = useState(null); // { emp, day } for the popup
+  const monthRef = useRef(month); monthRef.current = month;
+  const seq = useRef(0);
+  const saving = useRef(0);
   const load = useCallback(async () => {
+    const my = ++seq.current;
     try {
       const [e, a] = await Promise.all([api("/employees"), api(`/attendance?month=${month}`)]);
+      if (my !== seq.current || month !== monthRef.current || saving.current > 0) return;
       setEmps(e.filter((x) => x.active || a.records[x.id]));
       setData(a);
-    } catch (x) { setErr(x.message); }
+    } catch (x) { if (my === seq.current) setErr(x.message); }
   }, [month]);
+  const loadRef = useRef(load); loadRef.current = load; // always reload the date/month on screen now
   useEffect(() => { load(); }, [load]);
   useLiveSync(load);
 
@@ -33,8 +39,11 @@ export default function Attendance({ month, isAdmin = true }) {
       if (next) rec[date] = next; else delete rec[date];
       return { ...d, records: { ...d.records, [empId]: rec } };
     });
+    saving.current += 1;
     try { await api("/attendance", { method: "PUT", body: { employee_id: empId, date, status: next } }); }
-    catch (x) { setErr(x.message); load(); }
+    catch (x) { setErr(x.message); }
+    saving.current -= 1;
+    if (saving.current === 0) loadRef.current();
   };
   const markDay = async (date) => {
     await api("/attendance/bulk", { method: "POST", body: { month, date, status: "P", only_empty: true } });

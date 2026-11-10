@@ -32,13 +32,20 @@ export default function Today({ isAdmin = true }) {
   const [filter, setFilter] = useState("all");
   const dateRef = useRef(null);
 
+  const dRef = useRef(d); dRef.current = d;
+  const seq = useRef(0);      // only the newest answer is used
+  const saving = useRef(0);   // saves still on their way to the server
   const load = useCallback(async () => {
+    const my = ++seq.current;
     try {
       const [e, a] = await Promise.all([api("/employees"), api(`/attendance/day?d=${d}`)]);
+      // drop answers for another date, older answers, or answers taken while a save is still running
+      if (my !== seq.current || d !== dRef.current || saving.current > 0) return;
       setEmps(e.filter((x) => x.active));
       setDay(a);
-    } catch (x) { setErr(x.message); }
+    } catch (x) { if (my === seq.current) setErr(x.message); }
   }, [d]);
+  const loadRef = useRef(load); loadRef.current = load; // always reload the date/month on screen now
   useEffect(() => { setDay(null); load(); }, [load]);
   useLiveSync(load, 4000);
 
@@ -55,10 +62,12 @@ export default function Today({ isAdmin = true }) {
       if (next) records[empId] = { status: next, notified: false, sending: true }; else delete records[empId];
       return { ...dd, records };
     });
+    saving.current += 1;
     try {
       await api("/attendance", { method: "PUT", body: { employee_id: empId, date: d, status: next } });
-      load(); // shows "Sent" once WhatsApp has accepted the message
-    } catch (x) { setErr(x.message); load(); }
+    } catch (x) { setErr(x.message); }
+    saving.current -= 1;
+    if (saving.current === 0) loadRef.current(); // shows "Sent" once WhatsApp has accepted the message
   };
   const allPresent = async () => {
     try {

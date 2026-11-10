@@ -75,18 +75,41 @@ export default function WhatsApp() {
       {err && <div className="error" onClick={() => setErr("")}>{err}</div>}
       <form className="two-col" onSubmit={save}>
         <div className="card">
-          <h3>Interakt connection</h3>
+          <h3>WhatsApp connection</h3>
           <label>Company name (used in messages and slips)<input value={s.company_name} onChange={set("company_name")} /></label>
-          <label>Interakt API key {s.has_api_key && <span className="ok-text">✓ saved</span>}
-            <input value={s.interakt_api_key} onChange={set("interakt_api_key")} placeholder="Interakt → Settings → Developer Setting → Secret Key" />
+          <label>Send messages through
+            <select value={s.wa_provider} onChange={set("wa_provider")}>
+              <option value="interakt">Interakt</option>
+              <option value="bhashsms">BhashSMS</option>
+            </select>
           </label>
-          <div className="row">
+          {s.wa_provider === "bhashsms" ? <>
+            <label>BhashSMS API URL<input value={s.bhash_url} onChange={set("bhash_url")} /></label>
+            <div className="row">
+              <label>User<input value={s.bhash_user} onChange={set("bhash_user")} autoComplete="off" /></label>
+              <label>Password {s.has_bhash_pass && <span className="ok-text">✓ saved</span>}
+                <input type="password" value={s.bhash_pass} onChange={set("bhash_pass")} autoComplete="new-password" placeholder="BhashSMS password" />
+              </label>
+            </div>
+            <div className="row">
+              <label>Sender<input value={s.bhash_sender} onChange={set("bhash_sender")} /></label>
+              <label>Priority<input value={s.bhash_priority} onChange={set("bhash_priority")} /></label>
+              <label>Type (stype)<input value={s.bhash_stype} onChange={set("bhash_stype")} /></label>
+            </div>
             <label>Country code<input value={s.country_code} onChange={set("country_code")} /></label>
-            <label>Template language code<input value={s.tpl_language} onChange={set("tpl_language")} /></label>
-          </div>
-          <label>Attendance template code name<input value={s.tpl_attendance} onChange={set("tpl_attendance")} /></label>
-          <label>Salary slip template code name<input value={s.tpl_salary} onChange={set("tpl_salary")} /></label>
-          <label>Owner summary template code name<input value={s.tpl_summary} onChange={set("tpl_summary")} /></label>
+            <p className="muted small">Each message is sent as the template name below with its values in <code>Params</code>, separated by commas (commas inside amounts are removed, e.g. 15,000 → 15000). The phone number is sent as 10 digits.</p>
+          </> : <>
+            <label>Interakt API key {s.has_api_key && <span className="ok-text">✓ saved</span>}
+              <input value={s.interakt_api_key} onChange={set("interakt_api_key")} placeholder="Interakt → Settings → Developer Setting → Secret Key" />
+            </label>
+            <div className="row">
+              <label>Country code<input value={s.country_code} onChange={set("country_code")} /></label>
+              <label>Template language code<input value={s.tpl_language} onChange={set("tpl_language")} /></label>
+            </div>
+          </>}
+          <label>Attendance template name<input value={s.tpl_attendance} onChange={set("tpl_attendance")} /></label>
+          <label>Salary slip template name<input value={s.tpl_salary} onChange={set("tpl_salary")} /></label>
+          <label>Owner summary template name<input value={s.tpl_summary} onChange={set("tpl_summary")} /></label>
           <div className="row">
             <input placeholder="Mobile number for a test message" value={testNo} onChange={(e) => setTestNo(e.target.value)} />
             <button type="button" className="btn" onClick={test} disabled={!testNo}>Send test</button>
@@ -112,8 +135,9 @@ export default function WhatsApp() {
       </form>
 
       <div className="card">
-        <h3>Templates to create in Interakt</h3>
-        <p className="muted small">In Interakt, go to Templates → Create, choose category <b>Utility</b> and language <b>English</b>, and paste each text below. After WhatsApp approves a template, enter its code name above (the part of the template's URL between <code>/template/</code> and <code>/view</code>). Keep the variables in the same order. WhatsApp does not allow a template to start or end with a variable, which is why each one ends with a fixed line.</p>
+        <h3>Templates to create in {s.wa_provider === "bhashsms" ? "BhashSMS" : "Interakt"}</h3>
+        {s.wa_provider === "bhashsms" && <p className="muted small">In BhashSMS, create each template below for WhatsApp (category <b>Utility</b>, language <b>English</b>). Once it is approved, enter its exact template name above. Keep the variables in the same order.</p>}
+        <p className="muted small" style={s.wa_provider === "bhashsms" ? { display: "none" } : undefined}>In Interakt, go to Templates → Create, choose category <b>Utility</b> and language <b>English</b>, and paste each text below. After WhatsApp approves a template, enter its code name above (the part of the template's URL between <code>/template/</code> and <code>/view</code>). Keep the variables in the same order. WhatsApp does not allow a template to start or end with a variable, which is why each one ends with a fixed line.</p>
         <div className="tpl-grid">
           {TEMPLATES.map((t) => (
             <div key={t.key} className="tpl">
