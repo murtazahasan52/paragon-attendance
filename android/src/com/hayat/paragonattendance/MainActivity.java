@@ -60,7 +60,7 @@ import java.net.URL;
  */
 public class MainActivity extends Activity {
     private static final String PREFS = "paragon";
-    private static final String KEY_URL = "server_url";
+    private static final String KEY_URL = "server_url_v2"; // v2: addresses saved by older versions (office PC) are ignored
     private static final int NAVY = 0xFF123A5E;
     private static final int NAVY_DARK = 0xFF0D2B47;
     private static final int REQ_FILE = 11;

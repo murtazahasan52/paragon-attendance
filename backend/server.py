@@ -28,7 +28,7 @@ import re
 import secrets
 import time
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 from zoneinfo import ZoneInfo
@@ -1577,6 +1577,35 @@ async def startup():
 
 
 app.include_router(api)
+
+
+# ---------- Live sync: every saved change bumps a counter; open screens poll /api/sync ----------
+SYNC_SKIP = ("/api/login", "/api/sync", "/api/gdrive/backup-beacon")
+
+
+@app.middleware("http")
+async def live_sync_middleware(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith("/api"):
+        response.headers["Cache-Control"] = "no-store"
+        if request.method in ("POST", "PUT", "PATCH", "DELETE") and response.status_code < 400 \
+                and not path.startswith(SYNC_SKIP):
+            try:
+                await db.sync_state.update_one(
+                    {"_id": "changes"}, {"$inc": {"v": 1}, "$set": {"at": datetime.now(timezone.utc).isoformat()}},
+                    upsert=True)
+            except Exception as e:  # never fail a save because of the sync counter
+                logging.warning("sync counter: %s", e)
+    return response
+
+
+@app.get("/api/sync")
+async def sync_version(authorization: Optional[str] = Header(None)):
+    if not authorization or not authorization.startswith("Bearer ") or not token_user(authorization[7:]):
+        raise HTTPException(401, "Not logged in")
+    doc = await db.sync_state.find_one({"_id": "changes"}) or {}
+    return {"v": doc.get("v", 0), "at": doc.get("at")}
 app.add_middleware(CORSMiddleware, allow_credentials=True,
                    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
                    allow_methods=["*"], allow_headers=["*"])

@@ -7,7 +7,7 @@ BT="$SDK/android-15"            # build-tools 35
 JAR="$SDK/android-35/android.jar"
 KS="${KEYSTORE:-$HERE/paragon-release.jks}"
 KSPASS="${KEYSTORE_PASS:-paragon@hayat}"
-SERVER_URL="${SERVER_URL:-https://paragon-attendance.vercel.app}"   # built-in server address
+SERVER_URL="${SERVER_URL:-https://paragon-attendance-eight.vercel.app}"   # built-in server address
 B="$HERE/build"; rm -rf "$B"; mkdir -p "$B/gen/com/hayat/paragonattendance" "$B/classes" "$B/dex"
 cat > "$B/gen/com/hayat/paragonattendance/AppConfig.java" <<JAVA
 package com.hayat.paragonattendance;
@@ -16,7 +16,7 @@ public final class AppConfig { public static final String SERVER_URL = "${SERVER
 JAVA
 echo "Server address built in: ${SERVER_URL%/}"
 "$BT/aapt2" compile --dir "$HERE/res" -o "$B/res.zip"
-"$BT/aapt2" link -o "$B/base.apk" -I "$JAR" --manifest "$HERE/AndroidManifest.xml" --java "$B/gen" "$B/res.zip" --min-sdk-version 24 --target-sdk-version 35 --version-code 3 --version-name 1.2.0
+"$BT/aapt2" link -o "$B/base.apk" -I "$JAR" --manifest "$HERE/AndroidManifest.xml" --java "$B/gen" "$B/res.zip" --min-sdk-version 24 --target-sdk-version 35 --version-code 5 --version-name 1.2.2
 javac -nowarn --release 11 -classpath "$JAR" -d "$B/classes" $(find "$HERE/src" "$B/gen" -name "*.java") 2>&1 | grep -v "^Picked up" || true
 test -n "$(find "$B/classes" -name 'MainActivity.class')"
 "$BT/d8" --release --min-api 24 --lib "$JAR" --output "$B/dex" $(find "$B/classes" -name "*.class")
