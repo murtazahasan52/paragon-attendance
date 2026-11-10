@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { api, inr, monthLabel, fmtDate, downloadFile, printPage } from "../api";
+import { api, inr, monthLabel, fmtDate, downloadFile, printPage, useLiveSync } from "../api";
 import { SlipView, WaBadge } from "../components";
 
 export default function Salary({ month }) {
@@ -12,6 +12,7 @@ export default function Salary({ month }) {
 
   const load = useCallback(() => api(`/payroll?month=${month}`).then(setP).catch((e) => setErr(e.message)), [month]);
   useEffect(() => { setP(null); setSlip(null); load(); }, [load]);
+  useLiveSync(load);
   const flash = (m) => { setMsg(m); setTimeout(() => setMsg(""), 4000); };
 
   const saveDeduction = async (row, val) => {

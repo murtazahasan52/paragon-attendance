@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { api, inr, fmtDate, thisMonth, todayISO, monthLabel } from "../api";
+import { api, inr, fmtDate, thisMonth, todayISO, monthLabel, useLiveSync } from "../api";
 import { Modal } from "../components";
 
 export const PLAN_TEXT = (a) =>
@@ -70,6 +70,7 @@ export default function Advances() {
   const [showClosed, setShowClosed] = useState(false);
   const load = () => Promise.all([api("/advances"), api("/employees")]).then(([a, e]) => { setList(a); setEmps(e); }).catch((x) => setErr(x.message));
   useEffect(() => { load(); }, []);
+  useLiveSync(load);
   const del = async (a) => {
     if (!window.confirm(`Delete advance of ${inr(a.amount)} for ${a.employee_name}?`)) return;
     try { await api(`/advances/${a.id}`, { method: "DELETE" }); load(); } catch (x) { setErr(x.message); }

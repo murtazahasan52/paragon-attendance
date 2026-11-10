@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 export const API_ROOT = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/$/, "") || window.location.origin;
 const BASE = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/$/, "") + "/api";
 
@@ -19,6 +21,7 @@ export function setToken(t) {
 export async function api(path, { method = "GET", body } = {}) {
   const res = await fetch(BASE + path, {
     method,
+    cache: "no-store",
     headers: { "Content-Type": "application/json", Authorization: "Bearer " + getToken() },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -86,4 +89,52 @@ export function printPage(title) {
 
 export function changeServer() {
   if (isApp()) window.ParagonApp.changeServer();
+}
+
+/* ---- Live sync ----
+   Every saved change on any phone or computer bumps a counter on the server.
+   Open screens check it every few seconds (and the moment the app comes back to the
+   front) and reload their data when it changed. It waits while someone is typing. */
+const typing = () => {
+  const el = document.activeElement;
+  if (!el) return false;
+  const t = (el.getAttribute("type") || "").toLowerCase();
+  return el.tagName === "TEXTAREA" || el.tagName === "SELECT" ||
+    (el.tagName === "INPUT" && !["button", "submit", "checkbox", "radio"].includes(t));
+};
+
+export function useLiveSync(reload, ms = 5000) {
+  const ref = useRef(reload);
+  ref.current = reload;
+  useEffect(() => {
+    let last = null, busy = false, stopped = false;
+    const tick = async () => {
+      if (busy || stopped || document.hidden || !getToken()) return;
+      busy = true;
+      try {
+        const r = await fetch(BASE + "/sync", { cache: "no-store", headers: { Authorization: "Bearer " + getToken() } });
+        if (r.ok) {
+          const { v } = await r.json();
+          if (last !== null && v !== last) {
+            if (typing()) { busy = false; return; } // try again on the next tick
+            await Promise.resolve(ref.current()).catch(() => {});
+          }
+          last = v;
+        }
+      } catch (e) { /* offline: try again later */ }
+      busy = false;
+    };
+    tick();
+    const t = setInterval(tick, ms);
+    const wake = () => { if (!document.hidden) tick(); };
+    document.addEventListener("visibilitychange", wake);
+    window.addEventListener("focus", wake);
+    window.addEventListener("online", wake);
+    return () => {
+      stopped = true; clearInterval(t);
+      document.removeEventListener("visibilitychange", wake);
+      window.removeEventListener("focus", wake);
+      window.removeEventListener("online", wake);
+    };
+  }, [ms]);
 }

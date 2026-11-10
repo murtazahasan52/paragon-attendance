@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { api, todayISO } from "../api";
+import { api, todayISO, useLiveSync } from "../api";
 import Icon from "../icons";
 
 const STATUS = [
@@ -40,12 +40,13 @@ export default function Today({ isAdmin = true }) {
     } catch (x) { setErr(x.message); }
   }, [d]);
   useEffect(() => { setDay(null); load(); }, [load]);
-  useEffect(() => { const t = setInterval(load, 20000); return () => clearInterval(t); }, [load]);
+  useLiveSync(load, 4000);
 
   const flash = (m) => { setMsg(m); setTimeout(() => setMsg(""), 3500); };
   const mark = async (empId, status) => {
     setErr("");
     const cur = day.records[empId]?.status;
+    if (!isAdmin && cur) { setErr("Already marked. Only the admin can change it."); return; }
     const next = cur === status ? "" : status;
     // update the screen at once, then save
     setDay((dd) => {
@@ -146,16 +147,17 @@ export default function Today({ isAdmin = true }) {
             const r = recs[e.id];
             const st = r?.status || "";
             const pending = day.pending.includes(e.id) || (r && r.sending);
+            const fixed = !isAdmin && !!st; // accountant: a marked day can't be changed
             return (
               <li key={e.id} className={"roll-row s-" + (st || "none")}>
                 <span className="avatar big">{initials(e.name)}</span>
                 <div className="roll-who">
                   <b>{e.name}</b>
-                  <span>{e.designation || "Staff"}{!e.phone && <em className="no-phone"> · no WhatsApp number</em>}</span>
+                  <span>{e.designation || "Staff"}{!e.phone && <em className="no-phone"> · no WhatsApp number</em>}{fixed && <em className="no-phone"> · 🔒 only admin can change</em>}</span>
                 </div>
                 <div className="seg-switch" role="radiogroup" aria-label={`Attendance for ${e.name}`}>
                   {STATUS.map(([s, label]) => (
-                    <button key={s} role="radio" aria-checked={st === s} className={"opt " + s + (st === s ? " on" : "")} onClick={() => mark(e.id, s)}>{label}</button>
+                    <button key={s} role="radio" aria-checked={st === s} className={"opt " + s + (st === s ? " on" : "")} disabled={fixed && st !== s} onClick={() => !fixed && mark(e.id, s)}>{label}</button>
                   ))}
                 </div>
                 <div className={"roll-wa" + (r && !pending && !r.notified ? " fail" : "")} title={r && r.error ? r.error : pending ? "Sending WhatsApp message" : r?.notified ? "WhatsApp message sent" : ""}>
@@ -166,7 +168,7 @@ export default function Today({ isAdmin = true }) {
           })}
           {!shown.length && <li className="roll-empty">{n ? "No one matches this filter." : "No employees yet. Add them on the Employees page."}</li>}
         </ul>
-        <p className="muted small roll-foot">Each person gets a WhatsApp message as soon as you tap Present, Half day or Absent. Changing it sends the corrected status.</p>
+        <p className="muted small roll-foot">Each person gets a WhatsApp message as soon as you tap Present, Half day or Absent. {isAdmin ? "Changing it sends the corrected status." : "Once marked, only the admin can change it."}</p>
       </div>
     </div>
   );

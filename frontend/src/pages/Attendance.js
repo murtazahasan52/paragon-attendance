@@ -1,25 +1,31 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { api, monthLabel } from "../api";
+import { api, fmtDate, useLiveSync } from "../api";
+import { Modal } from "../components";
 
-const NEXT = { "": "P", P: "H", H: "A", A: "" };
+const LABEL = { P: "Present", H: "Half day", A: "Absent" };
 
 export default function Attendance({ month, isAdmin = true }) {
   const [emps, setEmps] = useState([]);
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
+  const [pick, setPick] = useState(null); // { emp, day } for the popup
   const load = useCallback(async () => {
     try {
       const [e, a] = await Promise.all([api("/employees"), api(`/attendance?month=${month}`)]);
-      setEmps(e.filter((x) => x.active || a.records[x.id] || a.overrides[x.id] != null));
+      setEmps(e.filter((x) => x.active || a.records[x.id]));
       setData(a);
     } catch (x) { setErr(x.message); }
   }, [month]);
   useEffect(() => { load(); }, [load]);
+  useLiveSync(load);
 
-  const cycle = async (empId, date) => {
-    if (data.locked.includes(empId)) { setErr("Salary slip already generated for this employee and month. Cancel the slip to edit."); return; }
-    const cur = data.records[empId]?.[date] || "";
-    const next = NEXT[cur];
+  const open = (emp, day) => {
+    if (data.locked.includes(emp.id)) { setErr("Salary slip already generated for this employee and month. Cancel the slip to edit."); return; }
+    if (!isAdmin && data.records[emp.id]?.[day.date]) { setErr("Already marked. Only the admin can change it."); return; }
+    setPick({ emp, day });
+  };
+  const setStatus = async (empId, date, next) => {
+    setPick(null);
     setData((d) => {
       const rec = { ...(d.records[empId] || {}) };
       if (next) rec[date] = next; else delete rec[date];
@@ -28,18 +34,8 @@ export default function Attendance({ month, isAdmin = true }) {
     try { await api("/attendance", { method: "PUT", body: { employee_id: empId, date, status: next } }); }
     catch (x) { setErr(x.message); load(); }
   };
-  const fill = async (empIds, status, onlyEmpty = true) => {
-    await api("/attendance/bulk", { method: "POST", body: { month, status, employee_ids: empIds, only_empty: onlyEmpty } });
-    load();
-  };
   const markDay = async (date) => {
     await api("/attendance/bulk", { method: "POST", body: { month, date, status: "P", only_empty: true } });
-    load();
-  };
-  const setOverride = async (empId, val) => {
-    try {
-      await api("/attendance/override", { method: "PUT", body: { employee_id: empId, month, days: val === "" ? null : Number(val) } });
-    } catch (x) { setErr(x.message); }
     load();
   };
 
@@ -53,13 +49,9 @@ export default function Attendance({ month, isAdmin = true }) {
           <span className="cell P">P</span> Present <span className="cell H">H</span> Half day <span className="cell A">A</span> Absent
           <span className="cell sun">S</span> Sunday <span className="cell hol">★</span> Paid holiday <span className="lock">🔒</span> Slip generated
         </div>
-        {isAdmin && <div className="row-inline">
-          <button className="btn" onClick={() => fill([], "P")}>Mark blank working days Present</button>
-          <button className="btn danger" onClick={() => window.confirm(`Clear ALL attendance for ${monthLabel(month)}?`) && fill([], "", false)}>Clear month</button>
-        </div>}
       </div>
       {err && <div className="error" onClick={() => setErr("")}>{err}</div>}
-      <p className="muted small">Click a cell to change it: blank → P → H → A → blank. Click a date heading to mark everyone present that day. {isAdmin && "“Days override” lets you type days worked directly (for example 26); it takes priority over the marked days."}</p>
+      <p className="muted small">Click a cell to mark Present, Half day or Absent.{!isAdmin && " Once a day is marked, only the admin can change it."} Click a date heading to mark everyone present that day.</p>
       <div className="card flush scroll">
         <table className="att">
           <thead>
@@ -71,7 +63,7 @@ export default function Attendance({ month, isAdmin = true }) {
                   <div>{d.day}</div><div className="wd">{d.weekday.slice(0, 2)}</div>
                 </th>
               ))}
-              <th>Marked</th>{isAdmin && <><th>Days override</th><th></th></>}
+              <th>Marked</th>
             </tr>
           </thead>
           <tbody>
@@ -83,15 +75,9 @@ export default function Attendance({ month, isAdmin = true }) {
                   {data.days.map((d) => {
                     const s = data.records[e.id]?.[d.date] || "";
                     const cls = s || (d.sunday ? "sun" : d.holiday ? "hol" : "");
-                    return <td key={d.date} className={"cell " + cls} onClick={() => cycle(e.id, d.date)}>{s || (d.sunday ? "S" : d.holiday ? "★" : "")}</td>;
+                    return <td key={d.date} className={"cell " + cls} onClick={() => open(e, d)}>{s || (d.sunday ? "S" : d.holiday ? "★" : "")}</td>;
                   })}
                   <td className="r"><b>{count(e.id)}</b></td>
-                  {isAdmin && <><td>
-                    <input className="ovr" type="number" step="0.5" min="0" max="31" placeholder="—" disabled={locked}
-                           defaultValue={data.overrides[e.id] ?? ""} key={month + e.id + (data.overrides[e.id] ?? "")}
-                           onBlur={(ev) => ev.target.value !== String(data.overrides[e.id] ?? "") && setOverride(e.id, ev.target.value)} />
-                  </td>
-                  <td>{!locked && <button className="btn sm" onClick={() => fill([e.id], "P")}>Fill P</button>}</td></>}
                 </tr>
               );
             })}
@@ -99,6 +85,26 @@ export default function Attendance({ month, isAdmin = true }) {
           </tbody>
         </table>
       </div>
+      {pick && (() => {
+        const cur = data.records[pick.emp.id]?.[pick.day.date] || "";
+        return (
+          <Modal title={pick.emp.name} onClose={() => setPick(null)}>
+            <div className="muted small">
+              {fmtDate(pick.day.date)} · {pick.day.weekday}{pick.day.sunday ? " (Sunday)" : ""}{pick.day.holiday ? ` (${pick.day.holiday})` : ""}
+              {cur && <> · now <b>{LABEL[cur]}</b></>}
+            </div>
+            <div className="mark-pick">
+              {["P", "H", "A"].map((k) => (
+                <button key={k} className={"mp " + k + (cur === k ? " on" : "")} onClick={() => setStatus(pick.emp.id, pick.day.date, k)}>
+                  <span className="mp-key">{k}</span>{LABEL[k]}
+                </button>
+              ))}
+            </div>
+            {!isAdmin && <div className="muted small mt">Once saved, only the admin can change it.</div>}
+            {cur && isAdmin && <button className="btn block mt" onClick={() => setStatus(pick.emp.id, pick.day.date, "")}>Clear this day</button>}
+          </Modal>
+        );
+      })()}
     </div>
   );
 }

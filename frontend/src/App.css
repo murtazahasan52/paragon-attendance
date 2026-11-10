@@ -434,3 +434,17 @@ a.btn { text-decoration: none; }
 }
 .login-hint { margin: -12px 0 20px; color: var(--muted); font-size: 14px; }
 .roll-wa.fail { color: var(--half) !important; }
+
+/* Attendance grid: mark popup */
+.mark-pick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+.mark-pick .mp { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 6px; border-radius: 12px;
+  border: 2px solid var(--line); background: #fff; font-weight: 600; font-size: 14.5px; color: var(--ink); cursor: pointer; transition: transform .08s, background .12s; }
+.mark-pick .mp:active { transform: scale(.97); }
+.mark-pick .mp-key { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; font-size: 18px; font-weight: 700; color: #fff; }
+.mark-pick .P .mp-key { background: var(--ok); } .mark-pick .H .mp-key { background: #d9a22e; } .mark-pick .A .mp-key { background: var(--bad); }
+.mark-pick .P:hover, .mark-pick .P.on { border-color: var(--ok); background: #e9f5ee; }
+.mark-pick .H:hover, .mark-pick .H.on { border-color: #d9a22e; background: #fbf3e2; }
+.mark-pick .A:hover, .mark-pick .A.on { border-color: var(--bad); background: #fbeceb; }
+.btn.block { display: block; width: 100%; }
+.seg-switch .opt:disabled { opacity: .35; cursor: not-allowed; }
+.seg-switch .opt:disabled:hover { background: none; }

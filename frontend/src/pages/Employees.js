@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { api, inr, fmtDate, monthLabel, thisMonth, printPage } from "../api";
+import { api, inr, fmtDate, monthLabel, thisMonth, printPage, useLiveSync } from "../api";
 import { Modal, Stat, WaBadge } from "../components";
 import { AdvanceForm, PLAN_TEXT } from "./Advances";
 
@@ -192,6 +192,7 @@ export default function Employees() {
   const [q, setQ] = useState("");
   const load = () => api("/employees").then(setList).catch((e) => setErr(e.message));
   useEffect(() => { load(); }, []);
+  useLiveSync(load);
   const del = async (emp) => {
     if (!window.confirm(`Delete ${emp.name} and all their attendance and advances?`)) return;
     try { await api(`/employees/${emp.id}`, { method: "DELETE" }); load(); } catch (x) { setErr(x.message); }
