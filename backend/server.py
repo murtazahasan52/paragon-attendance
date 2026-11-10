@@ -1085,11 +1085,14 @@ class GenerateIn(BaseModel):
     month: str
     employee_ids: List[str] = []  # empty = everyone not yet generated
     deductions: Dict[str, float] = {}
+    round_off: Dict[str, float] = {}  # employee_id -> amount added to net pay (e.g. +6 or -4) to make it a round figure
     send_whatsapp: bool = True
 
 
 async def generate_slips(month: str, employee_ids: List[str], deductions: Dict[str, float], send: bool,
-                         skip_empty: bool = False, bg: Optional[BackgroundTasks] = None) -> dict:
+                         skip_empty: bool = False, bg: Optional[BackgroundTasks] = None,
+                         round_off: Optional[Dict[str, float]] = None) -> dict:
+    round_off = round_off or {}
     calc, wim, att, overrides = await month_context(month)
     done = {s["employee_id"] async for s in db.slips.find({"month": month})}
     drafts = {d["employee_id"]: d["advance_deduction"] async for d in db.drafts.find({"month": month})}
@@ -1109,8 +1112,12 @@ async def generate_slips(month: str, employee_ids: List[str], deductions: Dict[s
             errors.append(f"{e['name']}: advance deduction must be between 0 and "
                           f"{min(r['advance_outstanding'], r['gross'])}")
             continue
+        adj = round(float(round_off.get(e["id"], 0) or 0), 2)
+        if abs(adj) >= 100 or r["gross"] - ded + adj < 0:
+            errors.append(f"{e['name']}: round off must be less than Rs. 100")
+            continue
         slip = {**r, "id": str(uuid.uuid4()), "month": month, "period": f"{month}-01 to {month_days(month)[2][-1].isoformat()}",
-                "calc": calc, "advance_deduction": ded, "net": round(r["gross"] - ded, 2),
+                "calc": calc, "advance_deduction": ded, "round_off": adj, "net": round(r["gross"] - ded + adj, 2),
                 "advance_balance_after": round(r["advance_outstanding"] - ded, 2),
                 "generated_at": now_ist().isoformat(timespec="seconds"), "wa_status": "not sent"}
         await db.slips.insert_one(dict(slip))
@@ -1132,7 +1139,9 @@ def slip_values(sl: dict, company: str) -> List:
         "Fixed monthly salary" if fixed else f"{c['days_in_year']} - {c['sundays']} Sundays - {c['paid_holidays']} holidays = {c['working_days']} days",
         "-" if fixed else fmt_inr(sl["daily_rate"]),
         f"{sl['days_worked']:g}", sl["present"], sl["half_days"], sl["absent"],
-        fmt_inr(sl["gross"]), fmt_inr(sl["advance_deduction"]), fmt_inr(sl["net"]),
+        fmt_inr(sl["gross"]), fmt_inr(sl["advance_deduction"]),
+        fmt_inr(sl["net"]) + (f" (round off {'+' if sl.get('round_off', 0) > 0 else '-'}{fmt_inr(abs(sl['round_off']))})"
+                              if sl.get("round_off") else ""),
         fmt_inr(sl["advance_balance_after"]), company,
     ]
 
@@ -1156,7 +1165,7 @@ async def send_slip_messages(slip_ids: List[str]):
 async def generate(body: GenerateIn, bg: BackgroundTasks):
     # serverless: send inside the request (background work may be frozen after the response)
     return await generate_slips(body.month, body.employee_ids, body.deductions, body.send_whatsapp,
-                                bg=None if SERVERLESS else bg)
+                                bg=None if SERVERLESS else bg, round_off=body.round_off)
 
 
 @api.post("/slips/{slip_id}/send", dependencies=AUTH)

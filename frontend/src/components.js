@@ -73,6 +73,7 @@ export function SlipView({ row, calc, company, month, onBack, actions }) {
             </>}
             {fixed && <tr><td>Gross salary</td><td>Fixed monthly salary</td><td>{inr(row.gross)}</td></tr>}
             <tr><td>Less: advance deduction</td><td>Advance outstanding before this slip: {inr(row.advance_outstanding)}</td><td>− {inr(row.advance_deduction)}</td></tr>
+            {!!row.round_off && <tr><td>Round off</td><td></td><td>{row.round_off > 0 ? "+ " : "− "}{inr(Math.abs(row.round_off))}</td></tr>}
           </tbody>
         </table>
         <div className="net">Net salary payable: <b>{inr(row.net)}</b></div>

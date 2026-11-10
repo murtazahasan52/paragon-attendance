@@ -451,3 +451,13 @@ a.btn { text-decoration: none; }
 .att td.cell.future { cursor: not-allowed; background: repeating-linear-gradient(135deg, #f7f8fa 0 6px, #eef1f4 6px 12px); }
 .att td.cell.future:hover { box-shadow: none; }
 .att th.future { color: #b5bdc6; }
+.gen-h { margin: 14px 0 4px; font-size: 15px; }
+.gen-table { margin: 6px 0 4px; }
+.gen-table td, .gen-table th { padding: 7px 8px; }
+.gen-table input.ded { width: 110px; }
+.gen-table input.invalid { border-color: var(--bad); background: #fbeceb; }
+.gen-tools { margin: 4px 0; gap: 10px; flex-wrap: wrap; }
+.small-seg .opt { min-width: 0; padding: 5px 10px; font-size: 13px; }
+@media (max-width: 700px) { .gen-table { display: block; overflow-x: auto; } }
+.gen-tools label.inline { display: flex; align-items: center; gap: 6px; margin: 0; }
+.gen-tools label.inline select { width: auto; min-width: 90px; }
