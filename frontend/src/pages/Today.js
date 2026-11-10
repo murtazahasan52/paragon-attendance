@@ -46,6 +46,7 @@ export default function Today({ isAdmin = true }) {
   const mark = async (empId, status) => {
     setErr("");
     const cur = day.records[empId]?.status;
+    if (d > todayISO()) { setErr("Attendance can't be marked for a future date."); return; }
     if (!isAdmin && cur) { setErr("Already marked. Only the admin can change it."); return; }
     const next = cur === status ? "" : status;
     // update the screen at once, then save
@@ -101,8 +102,8 @@ export default function Today({ isAdmin = true }) {
             <span className="roll-day">{dt.toLocaleDateString("en-IN", { weekday: "long" })}{isToday && <em className="today-chip">Today</em>}</span>
             <span className="roll-num">{dt.toLocaleDateString("en-IN", { day: "numeric", month: "long" })}</span>
           </button>
-          <input ref={dateRef} type="date" className="month-hidden" value={d} onChange={(e) => e.target.value && setD(e.target.value)} tabIndex={-1} aria-hidden="true" />
-          <button className="icon-btn" onClick={() => setD(shiftDate(d, 1))} aria-label="Next day" disabled={isToday}><Icon name="right" /></button>
+          <input ref={dateRef} type="date" className="month-hidden" value={d} max={todayISO()} onChange={(e) => e.target.value && setD(e.target.value > todayISO() ? todayISO() : e.target.value)} tabIndex={-1} aria-hidden="true" />
+          <button className="icon-btn" onClick={() => setD(shiftDate(d, 1))} aria-label="Next day" disabled={d >= todayISO()}><Icon name="right" /></button>
         </div>
 
         <div className="roll-progress">

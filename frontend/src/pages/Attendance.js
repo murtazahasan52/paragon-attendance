@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { api, fmtDate, useLiveSync } from "../api";
+import { api, fmtDate, todayISO, useLiveSync } from "../api";
 import { Modal } from "../components";
 
 const LABEL = { P: "Present", H: "Half day", A: "Absent" };
@@ -20,6 +20,8 @@ export default function Attendance({ month, isAdmin = true }) {
   useLiveSync(load);
 
   const open = (emp, day) => {
+    const future = day.date > todayISO();
+    if (future && !(isAdmin && data.records[emp.id]?.[day.date])) return; // future dates can't be marked
     if (data.locked.includes(emp.id)) { setErr("Salary slip already generated for this employee and month. Cancel the slip to edit."); return; }
     if (!isAdmin && data.records[emp.id]?.[day.date]) { setErr("Already marked. Only the admin can change it."); return; }
     setPick({ emp, day });
@@ -51,15 +53,16 @@ export default function Attendance({ month, isAdmin = true }) {
         </div>
       </div>
       {err && <div className="error" onClick={() => setErr("")}>{err}</div>}
-      <p className="muted small">Click a cell to mark Present, Half day or Absent.{!isAdmin && " Once a day is marked, only the admin can change it."} Click a date heading to mark everyone present that day.</p>
+      <p className="muted small">Click a cell to mark Present, Half day or Absent. Future dates can't be marked.{!isAdmin && " Once a day is marked, only the admin can change it."} Click a date heading to mark everyone present that day.</p>
       <div className="card flush scroll">
         <table className="att">
           <thead>
             <tr>
               <th className="sticky">Employee</th>
               {data.days.map((d) => (
-                <th key={d.date} className={d.sunday ? "sun" : d.holiday ? "hol" : "click"} title={d.holiday || (d.sunday ? "Sunday" : "Mark everyone present")}
-                    onClick={() => !d.sunday && !d.holiday && markDay(d.date)}>
+                <th key={d.date} className={(d.sunday ? "sun" : d.holiday ? "hol" : d.date > todayISO() ? "" : "click") + (d.date > todayISO() ? " future" : "")}
+                    title={d.holiday || (d.sunday ? "Sunday" : d.date > todayISO() ? "Future date" : "Mark everyone present")}
+                    onClick={() => !d.sunday && !d.holiday && d.date <= todayISO() && markDay(d.date)}>
                   <div>{d.day}</div><div className="wd">{d.weekday.slice(0, 2)}</div>
                 </th>
               ))}
@@ -75,7 +78,7 @@ export default function Attendance({ month, isAdmin = true }) {
                   {data.days.map((d) => {
                     const s = data.records[e.id]?.[d.date] || "";
                     const cls = s || (d.sunday ? "sun" : d.holiday ? "hol" : "");
-                    return <td key={d.date} className={"cell " + cls} onClick={() => open(e, d)}>{s || (d.sunday ? "S" : d.holiday ? "★" : "")}</td>;
+                    return <td key={d.date} className={"cell " + cls + (d.date > todayISO() ? " future" : "")} onClick={() => open(e, d)}>{s || (d.sunday ? "S" : d.holiday ? "★" : "")}</td>;
                   })}
                   <td className="r"><b>{count(e.id)}</b></td>
                 </tr>
@@ -94,7 +97,7 @@ export default function Attendance({ month, isAdmin = true }) {
               {cur && <> · now <b>{LABEL[cur]}</b></>}
             </div>
             <div className="mark-pick">
-              {["P", "H", "A"].map((k) => (
+              {pick.day.date <= todayISO() && ["P", "H", "A"].map((k) => (
                 <button key={k} className={"mp " + k + (cur === k ? " on" : "")} onClick={() => setStatus(pick.emp.id, pick.day.date, k)}>
                   <span className="mp-key">{k}</span>{LABEL[k]}
                 </button>

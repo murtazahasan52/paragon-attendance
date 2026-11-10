@@ -448,3 +448,6 @@ a.btn { text-decoration: none; }
 .btn.block { display: block; width: 100%; }
 .seg-switch .opt:disabled { opacity: .35; cursor: not-allowed; }
 .seg-switch .opt:disabled:hover { background: none; }
+.att td.cell.future { cursor: not-allowed; background: repeating-linear-gradient(135deg, #f7f8fa 0 6px, #eef1f4 6px 12px); }
+.att td.cell.future:hover { box-shadow: none; }
+.att th.future { color: #b5bdc6; }

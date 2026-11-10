@@ -800,6 +800,8 @@ async def ensure_unlocked(emp_id: str, d: str):
 async def mark(body: MarkIn):
     if body.status not in ("", "P", "H", "A"):
         raise HTTPException(400, "Status must be P, H or A")
+    if body.status and body.date > today_ist():
+        raise HTTPException(400, "Attendance can't be marked for a future date")
     await ensure_unlocked(body.employee_id, body.date)
     if not is_admin():
         cur = await db.attendance.find_one({"employee_id": body.employee_id, "date": body.date})
@@ -822,6 +824,10 @@ async def bulk_mark(body: BulkIn):
     hol = {h["date"] for h in (await get_year_settings(y))["holidays"]}
     targets = [body.date] if body.date else \
         [d.isoformat() for d in days if d.weekday() != 6 and d.isoformat() not in hol]
+    if body.status:  # never mark future dates
+        if body.date and body.date > today_ist():
+            raise HTTPException(400, "Attendance can't be marked for a future date")
+        targets = [t for t in targets if t <= today_ist()]
     ids = body.employee_ids or [e["id"] async for e in db.employees.find({"active": True})]
     locked = {s["employee_id"] async for s in db.slips.find({"month": month})}
     changed = 0
