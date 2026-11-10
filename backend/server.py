@@ -801,6 +801,12 @@ async def mark(body: MarkIn):
     if body.status not in ("", "P", "H", "A"):
         raise HTTPException(400, "Status must be P, H or A")
     await ensure_unlocked(body.employee_id, body.date)
+    if not is_admin():
+        cur = await db.attendance.find_one({"employee_id": body.employee_id, "date": body.date})
+        if cur and cur.get("status"):
+            raise HTTPException(403, "Already marked. Only the admin can change it.")
+        if not body.status:
+            raise HTTPException(403, "Only the admin can clear attendance")
     await set_status(body.employee_id, body.date, body.status)
     return {"ok": True}
 
@@ -972,7 +978,7 @@ async def month_context(month: str):
     att: Dict[str, Dict[str, str]] = {}
     async for r in db.attendance.find({"date": {"$regex": f"^{month}-"}}):
         att.setdefault(r["employee_id"], {})[r["date"]] = r["status"]
-    overrides = {o["employee_id"]: o["days"] async for o in db.overrides.find({"month": month})}
+    overrides = {}  # "Days override" was removed: salary always uses the marked days
     return calc, working_in_month, att, overrides
 
 
